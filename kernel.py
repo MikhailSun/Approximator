@@ -150,7 +150,7 @@ def f_factory(func, val,
     return f
 
 class approximator():
-    def __init__(self, type, name_of_file):
+    def __init__(self, type, name_of_file, print_plot=True):
         # для удобства тут будем хранить всю самую важную инфу
         self.DATA = {}
         self.now = datetime.datetime.now()
@@ -179,24 +179,24 @@ class approximator():
 
         # 1.31) приводим G и PR к относительному виду
         # сначала сохраняем максимальные значения для каждого столбца данных
-        scales = {'PR': self.reader.PR.max(), 'G': self.reader.G.max(), 'Eff': self.reader.Eff.max()}
-        self.DATA['abs_scales'] = scales
+        self.scales = {'PR': self.reader.PR.max(), 'G': self.reader.G.max(), 'Eff': self.reader.Eff.max()}
+        self.DATA['abs_scales'] = self.scales
         if self.type_of_map == "turbine":
-            scales.update({'Gn': self.reader.Gn.max()})
+            self.scales.update({'Gn': self.reader.Gn.max()})
             if 'A' in self.reader:
-                scales.update({'A': self.reader.A.max()})
+                self.scales.update({'A': self.reader.A.max()})
             if 'L' in self.reader:
-                scales.update({'L': self.reader.L.max()})
+                self.scales.update({'L': self.reader.L.max()})
 
-        self.reader['Grel'] = self.reader['G'].apply(lambda x: x / scales['G'])
-        self.reader['PRrel'] = self.reader['PR'].apply(lambda x: x / scales['PR'])
-        self.reader['Effrel'] = self.reader['Eff'].apply(lambda x: x / scales['Eff'])
+        self.reader['Grel'] = self.reader['G'].apply(lambda x: x / self.scales['G'])
+        self.reader['PRrel'] = self.reader['PR'].apply(lambda x: x / self.scales['PR'])
+        self.reader['Effrel'] = self.reader['Eff'].apply(lambda x: x / self.scales['Eff'])
         if self.type_of_map == "turbine":
-            self.reader['Gnrel'] = self.reader['Gn'].apply(lambda x: x / scales['Gn'])
+            self.reader['Gnrel'] = self.reader['Gn'].apply(lambda x: x / self.scales['Gn'])
             if 'A' in self.reader:
-                self.reader['Arel'] = self.reader['A'].apply(lambda x: x / scales['A'])
+                self.reader['Arel'] = self.reader['A'].apply(lambda x: x / self.scales['A'])
             if 'L' in self.reader:
-                self.reader['Lrel'] = self.reader['L'].apply(lambda x: x / scales['L'])
+                self.reader['Lrel'] = self.reader['L'].apply(lambda x: x / self.scales['L'])
 
 
         self.DATA['reader'] = self.reader
@@ -340,23 +340,24 @@ class approximator():
             y_label_caption = 'PR relative'
 
         # график с исходными данными
-        self.fig1 = chart.Chart(points_for_scatter=points_for_scatter, points_for_plot=points_for_plot, xlabel=x_label_caption, ylabel=y_label_caption, figure_size=(14, 18),
-                                title='Первичная обработка исходных данных')
+        if print_plot:
+            self.fig1 = chart.Chart(points_for_scatter=points_for_scatter, points_for_plot=points_for_plot, xlabel=x_label_caption, ylabel=y_label_caption, figure_size=(14, 18),
+                                    title='Первичная обработка исходных данных')
 
-        if self.type_of_map=="turbine":
-            plt.ylim(min(self.reader.Gnrel)*0.1,max(self.reader.Gnrel)*1.2)
+            if self.type_of_map=="turbine":
+                plt.ylim(min(self.reader.Gnrel)*0.1,max(self.reader.Gnrel)*1.2)
 
 
-        #проверяем чтобы функция bettacurve правильно строила промежуточные кривые. Достраиваем на графике бетта-кривые
-        cmap = plt.get_cmap('jet') #используем палитру jet из матплотлиба
-        colors = [cmap(i) for i in np.linspace(0, 1, 9)]
+            #проверяем чтобы функция bettacurve правильно строила промежуточные кривые. Достраиваем на графике бетта-кривые
+            cmap = plt.get_cmap('jet') #используем палитру jet из матплотлиба
+            colors = [cmap(i) for i in np.linspace(0, 1, 9)]
 
-        for _i_color in zip(np.linspace(-0.5, 1.5, 9),colors):
-            i=_i_color[0]
-            color=_i_color[1]
-            y_betta=self.BettaCurve(i)(x)
-            self.fig1.figure.axes[0].plot(x, y_betta, '--', label='Betta=' + str(i), color=color)
-            self.fig1.figure.axes[0].legend()
+            for _i_color in zip(np.linspace(-0.5, 1.5, 9),colors):
+                i=_i_color[0]
+                color=_i_color[1]
+                y_betta=self.BettaCurve(i)(x)
+                self.fig1.figure.axes[0].plot(x, y_betta, '--', label='Betta=' + str(i), color=color)
+                self.fig1.figure.axes[0].legend()
 
     #сделаем функцию, которая на основе вспомогательного параметра бетта (0-1) будет вычислять три ключевых точки, на основе которых будет строиться новая парабола для указанного бетта
     #функция на выходе выдает полином, которому можно скормить переменную x
@@ -373,7 +374,7 @@ class approximator():
 
     #проверка экстраполяции напорных кривых (зачем это нужно: чтобы обеспечить физичную экстраполяцию напорных веток)
     #построение графика углового коэффициента k из уравнения y=k*x+b для верхних и нижних концов напорных веток
-    def stage1_extrapolation(self):
+    def stage1_extrapolation(self, print_plot=True):
         #4) сформируем векторы G_output, PR_output и Eff_output, где каждый элемент вектора- функция зависимости соответствующего параметра от бетта при различных значениях оборотов из вектора rotations
         slopes_G_low=[]
         slopes_PR_low=[]
@@ -611,8 +612,9 @@ class approximator():
                                 {'x':_rotations,'y':_slopes_PR_high,'label':'PR_high'},
                                 {'x':_rotations,'y':_slopes_Eff_low,'label':'Eff_low'},
                                 {'x':_rotations,'y':_slopes_Eff_high,'label':'Eff_high'}]
-            # self.fig1.add_chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='Коэффициенты k (slope) линейного уравнения y=k*x+b для разных оборотов и соответствующая регрессия',xlabel='n',ylabel='slope',ylim=[-100,10])
-            self.fig2 = chart.Chart(points_for_scatter=points_for_scatter, points_for_plot=points_for_plot,title='Коэффициенты k (slope) линейного уравнения y=k*x+b для разных оборотов и соответствующая регрессия',xlabel='n',ylabel='slope',ylim=[-100,10])
+            if print_plot:
+                # self.fig1.add_chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='Коэффициенты k (slope) линейного уравнения y=k*x+b для разных оборотов и соответствующая регрессия',xlabel='n',ylabel='slope',ylim=[-100,10])
+                self.fig2 = chart.Chart(points_for_scatter=points_for_scatter, points_for_plot=points_for_plot,title='Коэффициенты k (slope) линейного уравнения y=k*x+b для разных оборотов и соответствующая регрессия',xlabel='n',ylabel='slope',ylim=[-100,10])
 
         if self.type_of_map=="turbine":
             _rotations=np.linspace(self.rotations[0]*0.9,self.rotations[-1]*1.1,200)
@@ -641,10 +643,11 @@ class approximator():
                                 {'x':_rotations,'y':_slopes_PR_high,'label':'slopes_PR_high'},]
             points_for_plot_Eff=[{'x':_rotations,'y':_slopes_Eff_low,'label':'slopes_Eff_low'},
                                 {'x':_rotations,'y':_slopes_Eff_high,'label':'slopes_Eff_high'}]
-            self.fig2_1=chart.Chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='Коэффициенты k (slope) линейного уравнения y=k*x+b для разных оборотов и соответствующая регрессия',xlabel='n',ylabel='slope')
-            self.fig2_2=chart.Chart(points_for_scatter=points_for_scatter_Eff,points_for_plot=points_for_plot_Eff,title='Коэффициенты k (slope) линейного уравнения y=k*x+b для разных оборотов и соответствующая регрессия',xlabel='n',ylabel='slope')
+            if print_plot:
+                self.fig2_1=chart.Chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='Коэффициенты k (slope) линейного уравнения y=k*x+b для разных оборотов и соответствующая регрессия',xlabel='n',ylabel='slope')
+                self.fig2_2=chart.Chart(points_for_scatter=points_for_scatter_Eff,points_for_plot=points_for_plot_Eff,title='Коэффициенты k (slope) линейного уравнения y=k*x+b для разных оборотов и соответствующая регрессия',xlabel='n',ylabel='slope')
 
-    def stage2_check_every_curve(self):
+    def stage2_check_interpolation_along_n_curve_const(self, print_plot=True):
         #проходимся по всем заданным веткам оборотов, достраиваем несколько точек для экстраполяции на основе полученных выше угловых коэффициентов slopes. экстраполируем используя для каждой ветки оборотов максимально (или минимальное) значение бетта и прибавляя к нему (или вычитая из него) значение 0.1, 0.2 и 0.3 - т.е. экстраполируем на 3 точки
         rel_minimums={'G':[],'PR':[],'Eff':[],'Gn':[],'A':[],'L':[]}
         rel_maximums={'G':[],'PR':[],'Eff':[],'Gn':[],'A':[],'L':[]}
@@ -800,13 +803,13 @@ class approximator():
         self.DATA['rel_minimums']=rel_minimums
         # reader=new_reader  #обновляем массив reader с учетом добавленных экстраполируемых точек
 
-        G_output=[]
-        Eff_output=[]
-        PR_output=[]
+        self.G_output=[]#в этом списке хранятся функции, интерполирующие значение G для каждой из напорных веток отдельно
+        self.Eff_output=[]
+        self.PR_output=[]
         if self.type_of_map=="turbine":
-            Gn_output=[] #для турбины
-            L_output=[] #для турбины
-            A_output=[] #для турбины
+            self.Gn_output=[] #для турбины
+            self.L_output=[] #для турбины
+            self.A_output=[] #для турбины
 
         quantity_of_rotations=len(self.rotations)#для этого сначала надо знать количество напорных веток
         cmap = plt.get_cmap('jet') #используем палитру jet из матплотлиба
@@ -935,16 +938,16 @@ class approximator():
                     A_func=f_factory(A_func_rel,rel_maximums['A'].pop(0),rel_minimums['A'].pop(0))
                     # def A_func(x):
                     #     return A_func_rel(x)*max_A
-            G_output.append(G_func) #сохраняем в список ссылки на функции интерполяции параметра от бетта для каждой ветки оборотов
-            PR_output.append(PR_func)
-            Eff_output.append(Eff_func)
+            self.G_output.append(G_func) #сохраняем в список ссылки на функции интерполяции параметра от бетта для каждой ветки оборотов
+            self.PR_output.append(PR_func)
+            self.Eff_output.append(Eff_func)
             if self.type_of_map=="turbine":
                 if 'Gn_func_rel' in globals():
-                    Gn_output.append(Gn_func)
+                    self.Gn_output.append(Gn_func)
                 if 'L_func_rel' in globals():
-                    L_output.append(L_func)
+                    self.L_output.append(L_func)
                 if 'A_func_rel' in globals():
-                    A_output.append(A_func)
+                    self.A_output.append(A_func)
 
         #4.2) проверяем поветочно. Т.е. строим графики исходных данных (обозначены точками) и обработанных кривых отдельно для каждой ветки оборотов
             bbb=np.linspace(-0.5,1.5,200)
@@ -991,166 +994,164 @@ class approximator():
             # if type_of_map=="compressor":
             #     fig3, axes3 = plt.subplots(4,1)
             #     fig3.set_size_inches(17, 24)
+            if print_plot:
+                if self.type_of_map=="compressor":
+                    points_for_scatter=[{'x':Betta_temp,'y':G_temp,'label':'G rel','c':'green', 's': 15, 'linewidths':0.1, 'marker': '+'},
+                                        {'x':Betta_temp,'y':PR_temp,'label':'PR rel','c':'red', 's': 15, 'linewidths':0.1, 'marker': '+'},
+                                        {'x':Betta_temp,'y':Eff_temp,'label':'Eff rel','c':'blue', 's': 15, 'linewidths':0.1, 'marker': '+'}]
 
+                    points_for_plot=[{'x':bbb,'y':GGG,'label':'G rel','c':'green', 's': 30, 'marker': '+', 'lw':1},
+                                     {'x':bbb,'y':PRRR,'label':'PR rel','c':'red', 's': 30, 'marker': '+', 'lw':1},
+                                     {'x':bbb,'y':Efff,'label':'Eff rel','c':'blue', 's': 30, 'marker': '+', 'lw':1},
+                                     {'x':bbb,'y2':GGG_der2,'label':'G_curvature','c':'green','ls':':', 's': 30, 'marker': '+', 'lw':1},
+                                     {'x':bbb,'y2':PRRR_der2,'label':'PR_curvature','c':'red','ls':':', 's': 30, 'marker': '+', 'lw':1}]
+                    fig3=chart.Chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='{} {}'.format('G/PR/Eff rel = f(betta). Ветка n=',ni),xlabel='betta', ylabel='G/PR/Eff relative',dpi=150,figure_size=(14,21))
+                    fig3.add_chart(points_for_scatter=[{'y':PR_temp,'x':G_temp, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':PRRR,'x':GGG, 'lw':1}],title='PR rel=f(G rel). {} {}'.format('ветка n=',ni),xlabel='G rel',ylabel='PR rel')
+                    fig3.add_chart(points_for_scatter=[{'y':Eff_temp,'x':G_temp, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':Efff,'x':GGG, 'lw':1}],title='Eff rel=f(G rel). {} {}'.format('ветка n=',ni),xlabel='G rel',ylabel='Eff rel')
+                    fig3.add_chart(points_for_scatter=[{'y':Eff_temp,'x':PR_temp, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':Efff,'x':PRRR, 'lw':1}],title='Eff rel=f(PR rel). {} {}'.format('ветка n=',ni),xlabel='PR rel',ylabel='Eff rel',ylim=[0.2,max_Eff*1.1])
+            #то же самое в абс координатах
+                    points_for_scatter2=[{'x':Betta_temp,'y':G_temp_abs,'label':'G','c':'green', 's': 15, 'linewidths':0.1, 'marker': '+'},
+                                        {'x':Betta_temp,'y':PR_temp_abs,'label':'PR','c':'red', 's': 15, 'linewidths':0.1, 'marker': '+'},
+                                        {'x':Betta_temp,'y':Eff_temp_abs,'label':'Eff','c':'blue', 's': 15, 'linewidths':0.1, 'marker': '+'}]
+
+                    points_for_plot2=[{'x':bbb,'y':GGG2,'label':'G','c':'green', 's': 30, 'marker': '+', 'lw':1},
+                                     {'x':bbb,'y':PRRR2,'label':'PR','c':'red', 's': 30, 'marker': '+', 'lw':1},
+                                     {'x':bbb,'y':Efff2,'label':'Eff','c':'blue', 's': 30, 'marker': '+', 'lw':1}]
+                    fig3_2=chart.Chart(points_for_scatter=points_for_scatter2,points_for_plot=points_for_plot2,title='{} {}'.format('G/PR/Eff = f(betta). Ветка n=',ni),xlabel='betta',ylabel='G/PR/Eff absolute',dpi=150,figure_size=(14,21))
+                    fig3_2.add_chart(points_for_scatter=[{'y':PR_temp_abs,'x':G_temp_abs, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':PRRR2,'x':GGG2, 'lw':1}],title='PR=f(G). {} {}'.format('ветка n=',ni),xlabel='G',ylabel='PR',xlim=[0,self.DATA['abs_scales']['G']*1.05],ylim=[1,self.DATA['abs_scales']['PR']*1.1])
+                    fig3_2.add_chart(points_for_scatter=[{'y':Eff_temp_abs,'x':G_temp_abs, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':Efff2,'x':GGG2, 'lw':1}],title='Eff=f(G). {} {}'.format('ветка n=',ni),xlabel='G',ylabel='Eff',xlim=[0,self.DATA['abs_scales']['G']*1.05],ylim=[0,self.DATA['abs_scales']['Eff']*1.05])
+                    fig3_2.add_chart(points_for_scatter=[{'y':Eff_temp_abs,'x':PR_temp_abs, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':Efff2,'x':PRRR2, 'lw':1}],title='Eff=f(PR). {} {}'.format('ветка n=',ni),xlabel='PR',ylabel='Eff',xlim=[1,self.DATA['abs_scales']['PR']*1.05],ylim=[0,self.DATA['abs_scales']['Eff']*1.05])
+
+
+                if self.type_of_map=="turbine":
+                    points_for_scatter=[{'x':Betta_temp,'y':Gn_temp,'label':'Gn','c':'green'},
+                                        {'x':Betta_temp,'y':PR_temp,'label':'PR','c':'red'},
+                                        {'x':Betta_temp,'y':Eff_temp,'label':'Eff','c':'blue'},
+                                        {'x':Betta_temp,'y':A_temp,'label':'A','c':'black'},
+                                        {'x':Betta_temp,'y':L_temp,'label':'L','c':'darkorange'}]
+                    points_for_plot=[{'x':bbb,'y':GGGn,'label':'Gn','c':'green'},
+                                     {'x':bbb,'y':PRRR,'label':'PR','c':'red'},
+                                     {'x':bbb,'y':Efff,'label':'Eff','c':'blue'},
+                                     {'x':bbb,'y':AAA,'label':'A','c':'black'},
+                                     {'x':bbb,'y':LLL,'label':'L','c':'darkorange'},
+                                     {'x':bbb,'y2':GGGn_der2,'label':'G_curvature','c':'green','ls':':'},
+                                     {'x':bbb,'y2':PRRR_der2,'label':'PR_curvature','c':'red','ls':':'}]
+                    fig3=chart.Chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='{} {}'.format('Gn/PR/Eff rel = f(betta). Ветка n=',ni),xlabel='betta',ylabel='Gn/PR/Eff rel',dpi=150,figure_size=(14,21))
+
+                    points_for_scatter=[{'x':PR_temp,'y':Gn_temp,'label':'Gn=f(PR)','c':'green'},
+                                        {'y':Eff_temp,'x':Gn_temp,'label':'Eff=f(Gn)','c':'red'},
+                                        {'y':Eff_temp,'x':PR_temp,'label':'Eff=f(PR)','c':'blue'},
+                                        {'x':PR_temp,'y':A_temp,'label':'A=f(PR)','c':'black'},
+                                        {'x':PR_temp,'y':L_temp,'label':'L=f(PR)','c':'darkorange'}]
+                    points_for_plot=[{'x':PRRR,'y':GGGn,'label':'Gn=f(PR)','c':'green'},
+                                        {'y':Efff,'x':GGGn,'label':'Eff=f(Gn)','c':'red'},
+                                        {'y':Efff,'x':PRRR,'label':'Eff=f(PR)','c':'blue'},
+                                        {'x':PRRR,'y':AAA,'label':'A=f(PR)','c':'black'},
+                                        {'x':PRRR,'y':LLL,'label':'L=f(PR)','c':'darkorange'}]
+                    fig3.add_chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='Gn/Eff/A/L rel. {} {}'.format('ветка n=',ni),xlabel='Gn/Eff/A/L rel',ylabel='PR/Gn rel')
+                    # fig3.add_chart(points_for_scatter=[{'y':Eff_temp,'x':Gn_temp}],points_for_plot=[{'y':Efff,'x':GGGn}],title='Eff=f(Gn). {} {}'.format('ветка n=',ni),xlabel='Gn',ylabel='Eff')
+                    # fig3.add_chart(points_for_scatter=[{'y':Eff_temp,'x':PR_temp}],points_for_plot=[{'y':Efff,'x':PRRR}],title='Eff=f(PR). {} {}'.format('ветка n=',ni),xlabel='PR',ylabel='Eff',ylim=[0.2,max_Eff*1.1])
+
+        if print_plot:
             if self.type_of_map=="compressor":
-                points_for_scatter=[{'x':Betta_temp,'y':G_temp,'label':'G rel','c':'green', 's': 15, 'linewidths':0.1, 'marker': '+'},
-                                    {'x':Betta_temp,'y':PR_temp,'label':'PR rel','c':'red', 's': 15, 'linewidths':0.1, 'marker': '+'},
-                                    {'x':Betta_temp,'y':Eff_temp,'label':'Eff rel','c':'blue', 's': 15, 'linewidths':0.1, 'marker': '+'}]
-
-                points_for_plot=[{'x':bbb,'y':GGG,'label':'G rel','c':'green', 's': 30, 'marker': '+', 'lw':1},
-                                 {'x':bbb,'y':PRRR,'label':'PR rel','c':'red', 's': 30, 'marker': '+', 'lw':1},
-                                 {'x':bbb,'y':Efff,'label':'Eff rel','c':'blue', 's': 30, 'marker': '+', 'lw':1},
-                                 {'x':bbb,'y2':GGG_der2,'label':'G_curvature','c':'green','ls':':', 's': 30, 'marker': '+', 'lw':1},
-                                 {'x':bbb,'y2':PRRR_der2,'label':'PR_curvature','c':'red','ls':':', 's': 30, 'marker': '+', 'lw':1}]
-                fig3=chart.Chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='{} {}'.format('G/PR/Eff rel = f(betta). Ветка n=',ni),xlabel='betta',dpi=150,figure_size=(14,21))
-                fig3.add_chart(points_for_scatter=[{'y':PR_temp,'x':G_temp, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':PRRR,'x':GGG, 'lw':1}],title='PR rel=f(G rel). {} {}'.format('ветка n=',ni),xlabel='G rel',ylabel='PR rel')
-                fig3.add_chart(points_for_scatter=[{'y':Eff_temp,'x':G_temp, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':Efff,'x':GGG, 'lw':1}],title='Eff rel=f(G rel). {} {}'.format('ветка n=',ni),xlabel='G rel',ylabel='Eff rel')
-                fig3.add_chart(points_for_scatter=[{'y':Eff_temp,'x':PR_temp, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':Efff,'x':PRRR, 'lw':1}],title='Eff rel=f(PR rel). {} {}'.format('ветка n=',ni),xlabel='PR rel',ylabel='Eff rel',ylim=[0.2,max_Eff*1.1])
-        #то же самое в абс координатах
-                points_for_scatter2=[{'x':Betta_temp,'y':G_temp_abs,'label':'G','c':'green', 's': 15, 'linewidths':0.1, 'marker': '+'},
-                                    {'x':Betta_temp,'y':PR_temp_abs,'label':'PR','c':'red', 's': 15, 'linewidths':0.1, 'marker': '+'},
-                                    {'x':Betta_temp,'y':Eff_temp_abs,'label':'Eff','c':'blue', 's': 15, 'linewidths':0.1, 'marker': '+'}]
-
-                points_for_plot2=[{'x':bbb,'y':GGG2,'label':'G','c':'green', 's': 30, 'marker': '+', 'lw':1},
-                                 {'x':bbb,'y':PRRR2,'label':'PR','c':'red', 's': 30, 'marker': '+', 'lw':1},
-                                 {'x':bbb,'y':Efff2,'label':'Eff','c':'blue', 's': 30, 'marker': '+', 'lw':1}]
-                fig3_2=chart.Chart(points_for_scatter=points_for_scatter2,points_for_plot=points_for_plot2,title='{} {}'.format('G/PR/Eff = f(betta). Ветка n=',ni),xlabel='betta',dpi=150,figure_size=(14,21))
-                fig3_2.add_chart(points_for_scatter=[{'y':PR_temp_abs,'x':G_temp_abs, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':PRRR2,'x':GGG2, 'lw':1}],title='PR=f(G). {} {}'.format('ветка n=',ni),xlabel='G',ylabel='PR',xlim=[0,self.DATA['abs_scales']['G']*1.05],ylim=[1,self.DATA['abs_scales']['PR']*1.1])
-                fig3_2.add_chart(points_for_scatter=[{'y':Eff_temp_abs,'x':G_temp_abs, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':Efff2,'x':GGG2, 'lw':1}],title='Eff=f(G). {} {}'.format('ветка n=',ni),xlabel='G',ylabel='Eff',xlim=[0,self.DATA['abs_scales']['G']*1.05],ylim=[0,self.DATA['abs_scales']['Eff']*1.05])
-                fig3_2.add_chart(points_for_scatter=[{'y':Eff_temp_abs,'x':PR_temp_abs, 's': 15, 'linewidths':0.1, 'marker': '+'}],points_for_plot=[{'y':Efff2,'x':PRRR2, 'lw':1}],title='Eff=f(PR). {} {}'.format('ветка n=',ni),xlabel='PR',ylabel='Eff',xlim=[1,self.DATA['abs_scales']['PR']*1.05],ylim=[0,self.DATA['abs_scales']['Eff']*1.05])
-
-
-
-
-
+                chart.Chart(points_for_scatter=scatter_GPR,points_for_plot=plot_GPR,title='G rel=f(PR rel)',xlabel='G rel',ylabel='PR rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_GEff,points_for_plot=plot_GEff,title='Eff rel=f(G rel)',xlabel='G rel',ylabel='Eff rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_PREff,points_for_plot=plot_PREff,title='Eff rel=f(PR rel)',xlabel='PR rel',ylabel='Eff rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_BettaPR,points_for_plot=plot_BettaPR,title='PR rel=f(Betta)',xlabel='Betta',ylabel='PR rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_BettaG,points_for_plot=plot_BettaG,title='G rel=f(Betta)',xlabel='Betta',ylabel='G rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_BettaEff,points_for_plot=plot_BettaEff,title='Eff rel=f(Betta)',xlabel='Betta',ylabel='Eff rel',dpi=150,figure_size=(14,7))
             if self.type_of_map=="turbine":
-                points_for_scatter=[{'x':Betta_temp,'y':Gn_temp,'label':'Gn','c':'green'},
-                                    {'x':Betta_temp,'y':PR_temp,'label':'PR','c':'red'},
-                                    {'x':Betta_temp,'y':Eff_temp,'label':'Eff','c':'blue'},
-                                    {'x':Betta_temp,'y':A_temp,'label':'A','c':'black'},
-                                    {'x':Betta_temp,'y':L_temp,'label':'L','c':'darkorange'}]
-                points_for_plot=[{'x':bbb,'y':GGGn,'label':'Gn','c':'green'},
-                                 {'x':bbb,'y':PRRR,'label':'PR','c':'red'},
-                                 {'x':bbb,'y':Efff,'label':'Eff','c':'blue'},
-                                 {'x':bbb,'y':AAA,'label':'A','c':'black'},
-                                 {'x':bbb,'y':LLL,'label':'L','c':'darkorange'},
-                                 {'x':bbb,'y2':GGGn_der2,'label':'G_curvature','c':'green','ls':':'},
-                                 {'x':bbb,'y2':PRRR_der2,'label':'PR_curvature','c':'red','ls':':'}]
-                fig3=chart.Chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='{} {}'.format('Gn/PR/Eff rel = f(betta). Ветка n=',ni),xlabel='betta',ylabel='Gn/PR/Eff rel',dpi=150,figure_size=(14,21))
-
-                points_for_scatter=[{'x':PR_temp,'y':Gn_temp,'label':'Gn=f(PR)','c':'green'},
-                                    {'y':Eff_temp,'x':Gn_temp,'label':'Eff=f(Gn)','c':'red'},
-                                    {'y':Eff_temp,'x':PR_temp,'label':'Eff=f(PR)','c':'blue'},
-                                    {'x':PR_temp,'y':A_temp,'label':'A=f(PR)','c':'black'},
-                                    {'x':PR_temp,'y':L_temp,'label':'L=f(PR)','c':'darkorange'}]
-                points_for_plot=[{'x':PRRR,'y':GGGn,'label':'Gn=f(PR)','c':'green'},
-                                    {'y':Efff,'x':GGGn,'label':'Eff=f(Gn)','c':'red'},
-                                    {'y':Efff,'x':PRRR,'label':'Eff=f(PR)','c':'blue'},
-                                    {'x':PRRR,'y':AAA,'label':'A=f(PR)','c':'black'},
-                                    {'x':PRRR,'y':LLL,'label':'L=f(PR)','c':'darkorange'}]
-                fig3.add_chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='Gn/Eff/A/L rel. {} {}'.format('ветка n=',ni),xlabel='Gn/Eff/A/L rel',ylabel='PR/Gn rel')
-                # fig3.add_chart(points_for_scatter=[{'y':Eff_temp,'x':Gn_temp}],points_for_plot=[{'y':Efff,'x':GGGn}],title='Eff=f(Gn). {} {}'.format('ветка n=',ni),xlabel='Gn',ylabel='Eff')
-                # fig3.add_chart(points_for_scatter=[{'y':Eff_temp,'x':PR_temp}],points_for_plot=[{'y':Efff,'x':PRRR}],title='Eff=f(PR). {} {}'.format('ветка n=',ni),xlabel='PR',ylabel='Eff',ylim=[0.2,max_Eff*1.1])
-'''
-if type_of_map=="compressor":
-    chart.Chart(points_for_scatter=scatter_GPR,points_for_plot=plot_GPR,title='G=f(PR)',xlabel='G',ylabel='PR',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_GEff,points_for_plot=plot_GEff,title='Eff=f(G)',xlabel='G',ylabel='Eff',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_PREff,points_for_plot=plot_PREff,title='Eff=f(PR)',xlabel='PR',ylabel='Eff',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_BettaPR,points_for_plot=plot_BettaPR,title='PR=f(Betta)',xlabel='Betta',ylabel='PR',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_BettaG,points_for_plot=plot_BettaG,title='G=f(Betta) для компрессора или G*n=f(Betta) для турбины.',xlabel='Betta',ylabel='G или G*n',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_BettaEff,points_for_plot=plot_BettaEff,title='Eff=f(Betta)',xlabel='Betta',ylabel='Eff',dpi=150,figure_size=(14,7))
-if type_of_map=="turbine": 
-    chart.Chart(points_for_scatter=scatter_GnPR,points_for_plot=plot_GnPR,title='G*n=f(PR) rel.',xlabel='PR',ylabel='Gn',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_GEff,points_for_plot=plot_GEff,title='Eff=f(G*n) rel.',xlabel='Gn',ylabel='Eff',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_PREff,points_for_plot=plot_PREff,title='Eff=f(PR) rel',xlabel='PR',ylabel='Eff',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_BettaPR,points_for_plot=plot_BettaPR,title='PR=f(Betta) rel',xlabel='Betta',ylabel='PR',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_BettaG,points_for_plot=plot_BettaG,title='G*n=f(Betta) rel',xlabel='Betta',ylabel='Gn',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_BettaEff,points_for_plot=plot_BettaEff,title='Eff=f(Betta) rel',xlabel='Betta',ylabel='Eff',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_APR,points_for_plot=plot_APR,title='A=f(PR) rel',xlabel='PR',ylabel='A',dpi=150,figure_size=(14,7))
-    chart.Chart(points_for_scatter=scatter_LPR,points_for_plot=plot_LPR,title='L=f(PR) rel',xlabel='PR',ylabel='L',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_GnPR,points_for_plot=plot_GnPR,title='G*n rel=f(PR rel) rel.',xlabel='PR rel',ylabel='G*n rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_GEff,points_for_plot=plot_GEff,title='Eff rel=f(G*n rel)',xlabel='Gn rel',ylabel='Eff rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_PREff,points_for_plot=plot_PREff,title='Eff rel=f(PR rel)',xlabel='PR rel',ylabel='Eff rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_BettaPR,points_for_plot=plot_BettaPR,title='PR rel=f(Betta)',xlabel='Betta',ylabel='PR rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_BettaG,points_for_plot=plot_BettaG,title='G*n rel=f(Betta)',xlabel='Betta',ylabel='Gn rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_BettaEff,points_for_plot=plot_BettaEff,title='Eff rel=f(Betta)',xlabel='Betta',ylabel='Eff rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_APR,points_for_plot=plot_APR,title='A rel=f(PR rel)',xlabel='PR rel',ylabel='A rel',dpi=150,figure_size=(14,7))
+                chart.Chart(points_for_scatter=scatter_LPR,points_for_plot=plot_LPR,title='L rel=f(PR rel)',xlabel='PR rel',ylabel='L rel',dpi=150,figure_size=(14,7))
 
 
-#5) Формируем результирующую функцию поиска нужных параметров по значению оборотов n и вспомогательного параметра betta
-def Parameters_out(betta,n): 
-    G_vector=[]
-    PR_vector=[]
-    Eff_vector=[]
-    
-    if type_of_map=="turbine":
-        Gn_vector=[]
-        A_vector=[]
-        L_vector=[]  
-    
-    for ind, n_i in enumerate(rotations):
-        G_vector.append(G_output[ind](betta)) #здесь ind - порядковый номер ветки оборотов,G_output[ind] - функция, где храняится интерполирующая функция параметра от бетта, в нее мы передаем бетта и находим значение параметра
-        PR_vector.append(PR_output[ind](betta))
-        Eff_vector.append(Eff_output[ind](betta))
-        if type_of_map=="turbine":
-            if len(Gn_output)>0:   
-                Gn_vector.append(Gn_output[ind](betta))
-            if len(A_output)>0:   
-                A_vector.append(A_output[ind](betta))
-            if len(L_output)>0:
-                L_vector.append(L_output[ind](betta))
-    s_for_G=interp1d([-1,0,1,2],[0.00001,0.0000005,0.0000005,0.00001],fill_value=(1,1))
-    s_for_PR=interp1d([-1,0,1,2],[0.00001,0.00000005,0.00000005,0.00001],fill_value=(1,1))
-    s_for_Eff=interp1d([-1,0,0.85,0.9,2],[0.0001,0.000001,0.000001,0.0001,0.0005],fill_value=(1,1))
-    max_G=max(G_vector)
-    max_PR=max(PR_vector)
-    max_Eff=max(Eff_vector)
-    if type_of_map=="turbine":
-        s_for_Gn=interp1d([-1,0,1,2],[0.001,0.0001,0.0001,0.001],fill_value=(1,1))
-        s_for_A=interp1d([-1,0,1,2],[0.001,0.0001,0.0001,0.001],fill_value=(1,1))
-        s_for_L=interp1d([-1,0,1,2],[0.001,0.0001,0.0001,0.001],fill_value=(1,1))
-        max_Gn=max(Gn_vector)
-        max_A=max(A_vector)
-        max_L=max(L_vector)
+    #5) Формируем результирующую функцию поиска нужных параметров по значению оборотов n и вспомогательного параметра betta
+    def Parameters_out(self,betta,n):
+        G_vector=[]
+        PR_vector=[]
+        Eff_vector=[]
 
-    G_rel=UnivariateSplineModified(rotations,[x/max_G for x in G_vector],k=4,s=s_for_G(betta))
-    G=f_factory(G_rel,max_G)
-    G_der2=G_rel.derivative(2)
-    PR_rel=UnivariateSplineModified(rotations,[x/max_PR for x in PR_vector],k=4,s=s_for_PR(betta))
-    PR=f_factory(PR_rel,max_PR)
-    PR_der2=PR_rel.derivative(2)
-    Eff_rel=UnivariateSplineModified(rotations,[x/max_Eff for x in Eff_vector],k=5,s=s_for_Eff(betta))
-    Eff=f_factory(Eff_rel,max_Eff)
-    Eff_der2=Eff_rel.derivative(2)
-    if type_of_map=="turbine":
-#        L=Akima1DInterpolatorModified(rotations,L_vector)
-#        A=Akima1DInterpolatorModified(rotations,A_vector)
-        if len(Gn_vector)>0:
-            Gn_rel=UnivariateSplineModified(rotations,[x/max_Gn for x in Gn_vector],k=5,s=s_for_Gn(betta))
-            Gn=f_factory(Gn_rel,max_Gn)
-            Gn_der2=Gn_rel.derivative(2)
-        if len(L_vector)>0:
-            L_rel=UnivariateSplineModified(rotations,[x/max_L for x in L_vector],k=5,s=s_for_A(betta))
-            L=f_factory(L_rel,max_L)
-            L_der2=L_rel.derivative(2)
-        if len(A_vector)>0:
-            A_rel=UnivariateSplineModified(rotations,[x/max_A for x in A_vector],k=5,s=s_for_L(betta))
-            A=f_factory(A_rel,max_A)
-            A_der2=A_rel.derivative(2)
-    if type_of_map=="turbine":
-        _rez= {'G': G(n),'PR': PR(n), 'Eff': Eff(n), 'G_f':G, 'PR_f':PR, 'Eff_f':Eff, 'G_f_der2':G_der2, 'PR_f_der2':PR_der2, 'Eff_f_der2':Eff_der2, 'Rot_v': rotations, 'G_v': G_vector, 'PR_v': PR_vector,'Eff_v': Eff_vector}#для проверки    
-        if 'L' in locals():
-            _rez['L']=L(n)
-            _rez['L_f']=L
-            _rez['L_v']=L_vector
-            _rez['L_f_der2']=L_der2
-        if 'A' in locals():
-            _rez['A']=A(n)
-            _rez['A_f']=A
-            _rez['A_v']=A_vector
-            _rez['A_f_der2']=A_der2
-        if 'Gn' in locals():
-            _rez['Gn']=Gn(n)
-            _rez['Gn_f']=Gn
-            _rez['Gn_v']=Gn_vector
-            _rez['Gn_f_der2']=Gn_der2
-    elif type_of_map=='compressor':
-        _rez= {'G': G(n),'PR': PR(n), 'Eff': Eff(n), 'G_f':G, 'PR_f':PR, 'Eff_f':Eff,'G_f_der2':G_der2, 'PR_f_der2':PR_der2, 'Eff_f_der2':Eff_der2, 'Rot_v': rotations, 'G_v': G_vector, 'PR_v': PR_vector,'Eff_v': Eff_vector}#для проверки    
-    
-    return _rez
+        if self.type_of_map=="turbine":
+            Gn_vector=[]
+            A_vector=[]
+            L_vector=[]
+
+        for ind, n_i in enumerate(self.rotations):
+            G_vector.append(self.G_output[ind](betta)) #здесь ind - порядковый номер ветки оборотов,G_output[ind] - функция, где храняится интерполирующая функция параметра от бетта, в нее мы передаем бетта и находим значение параметра
+            PR_vector.append(self.PR_output[ind](betta))
+            Eff_vector.append(self.Eff_output[ind](betta))
+            if self.type_of_map=="turbine":
+                if len(self.Gn_output)>0:
+                    Gn_vector.append(self.Gn_output[ind](betta))
+                if len(self.A_output)>0:
+                    A_vector.append(self.A_output[ind](betta))
+                if len(self.L_output)>0:
+                    L_vector.append(self.L_output[ind](betta))
+        s_for_G=interp1d([-1,0,1,2],[0.00001,0.0000005,0.0000005,0.00001],fill_value=(1,1))
+        s_for_PR=interp1d([-1,0,1,2],[0.00001,0.00000005,0.00000005,0.00001],fill_value=(1,1))
+        s_for_Eff=interp1d([-1,0,0.85,0.9,2],[0.0001,0.000001,0.000001,0.0001,0.0005],fill_value=(1,1))
+        max_G=max(G_vector)
+        max_PR=max(PR_vector)
+        max_Eff=max(Eff_vector)
+        if self.type_of_map=="turbine":
+            s_for_Gn=interp1d([-1,0,1,2],[0.001,0.0001,0.0001,0.001],fill_value=(1,1))
+            s_for_A=interp1d([-1,0,1,2],[0.001,0.0001,0.0001,0.001],fill_value=(1,1))
+            s_for_L=interp1d([-1,0,1,2],[0.001,0.0001,0.0001,0.001],fill_value=(1,1))
+            max_Gn=max(Gn_vector)
+            max_A=max(A_vector)
+            max_L=max(L_vector)
+
+        G_rel=UnivariateSplineModified(self.rotations,[x/max_G for x in G_vector],k=4,s=s_for_G(betta))
+        G=f_factory(G_rel,max_G)
+        G_der2=G_rel.derivative(2)
+        PR_rel=UnivariateSplineModified(self.rotations,[x/max_PR for x in PR_vector],k=4,s=s_for_PR(betta))
+        PR=f_factory(PR_rel,max_PR)
+        PR_der2=PR_rel.derivative(2)
+        Eff_rel=UnivariateSplineModified(self.rotations,[x/max_Eff for x in Eff_vector],k=5,s=s_for_Eff(betta))
+        Eff=f_factory(Eff_rel,max_Eff)
+        Eff_der2=Eff_rel.derivative(2)
+        if self.type_of_map=="turbine":
+    #        L=Akima1DInterpolatorModified(rotations,L_vector)
+    #        A=Akima1DInterpolatorModified(rotations,A_vector)
+            if len(Gn_vector)>0:
+                Gn_rel=UnivariateSplineModified(self.rotations,[x/max_Gn for x in Gn_vector],k=5,s=s_for_Gn(betta))
+                Gn=f_factory(Gn_rel,max_Gn)
+                Gn_der2=Gn_rel.derivative(2)
+            if len(L_vector)>0:
+                L_rel=UnivariateSplineModified(self.rotations,[x/max_L for x in L_vector],k=5,s=s_for_A(betta))
+                L=f_factory(L_rel,max_L)
+                L_der2=L_rel.derivative(2)
+            if len(A_vector)>0:
+                A_rel=UnivariateSplineModified(self.rotations,[x/max_A for x in A_vector],k=5,s=s_for_L(betta))
+                A=f_factory(A_rel,max_A)
+                A_der2=A_rel.derivative(2)
+        if self.type_of_map=="turbine":
+            _rez= {'G': G(n),'PR': PR(n), 'Eff': Eff(n), 'G_f':G, 'PR_f':PR, 'Eff_f':Eff, 'G_f_der2':G_der2, 'PR_f_der2':PR_der2, 'Eff_f_der2':Eff_der2, 'Rot_v': self.rotations, 'G_v': G_vector, 'PR_v': PR_vector,'Eff_v': Eff_vector}#для проверки
+            if 'L' in locals():
+                _rez['L']=L(n)
+                _rez['L_f']=L
+                _rez['L_v']=L_vector
+                _rez['L_f_der2']=L_der2
+            if 'A' in locals():
+                _rez['A']=A(n)
+                _rez['A_f']=A
+                _rez['A_v']=A_vector
+                _rez['A_f_der2']=A_der2
+            if 'Gn' in locals():
+                _rez['Gn']=Gn(n)
+                _rez['Gn_f']=Gn
+                _rez['Gn_v']=Gn_vector
+                _rez['Gn_f_der2']=Gn_der2
+        elif self.type_of_map=='compressor':
+            _rez= {'G': G(n),'PR': PR(n), 'Eff': Eff(n), 'G_f':G, 'PR_f':PR, 'Eff_f':Eff,'G_f_der2':G_der2, 'PR_f_der2':PR_der2, 'Eff_f_der2':Eff_der2, 'Rot_v': self.rotations, 'G_v': G_vector, 'PR_v': PR_vector,'Eff_v': Eff_vector}#для проверки
+
+        return _rez
 
 #rez=Parameters_out(-0.1,1)    
       
@@ -1165,457 +1166,356 @@ def Parameters_out(betta,n):
 #    RectBivariateSpline, interp2d
 
 
+    def stage3(self, print_plot=True):
+        #6.1) проверяем поветочно. Т.е. строим графики исходных данных (обозначены точками) и обработанных кривых отдельно для каждой ветки бетта
+        bbb=np.linspace(-0.5,1.5,21)
+        #
+        # if type_of_map=="turbine":
+        #     fig4, axes4 = plt.subplots(5,1)
+        # elif type_of_map=='compressor':
+        #     fig4, axes4 = plt.subplots(3,1)
 
-#6.1) проверяем поветочно. Т.е. строим графики исходных данных (обозначены точками) и обработанных кривых отдельно для каждой ветки бетта
-bbb=np.linspace(-0.5,1.5,21)
-# 
-# if type_of_map=="turbine":
-#     fig4, axes4 = plt.subplots(5,1)
-# elif type_of_map=='compressor':
-#     fig4, axes4 = plt.subplots(3,1)
-    
+        cmap = plt.get_cmap('jet')
+        quantity_of_betta=len(bbb)#для этого сначала надо знать количество напорных веток
+        colors = [cmap(i) for i in np.linspace(0, 1, quantity_of_betta)]
+        plot_G=[]
+        scatter_G=[]
+        plot_PR=[]
+        scatter_PR=[]
+        plot_Eff=[]
+        scatter_Eff=[]
+        if self.type_of_map=="turbine":
+            plot_Gn=[]
+            scatter_Gn=[]
+            plot_A=[]
+            scatter_A=[]
+            plot_L=[]
+            scatter_L=[]
 
-quantity_of_betta=len(bbb)#для этого сначала надо знать количество напорных веток    
-colors = [cmap(i) for i in np.linspace(0, 1, quantity_of_betta)]
-plot_G=[]
-scatter_G=[]
-plot_PR=[]
-scatter_PR=[]
-plot_Eff=[]
-scatter_Eff=[]
-if type_of_map=="turbine":
-    plot_Gn=[]
-    scatter_Gn=[]
-    plot_A=[]
-    scatter_A=[]
-    plot_L=[]
-    scatter_L=[]
+        for ind,betta_i_colors in enumerate(zip(bbb,colors)):
+            betta_i=betta_i_colors[0]
+            color=betta_i_colors[1]
+            rez=self.Parameters_out(betta_i,1)
+            G_f=rez['G_f']
+            PR_f=rez['PR_f']
+            Eff_f=rez['Eff_f']
+            G_f_der2=rez['G_f_der2']
+            PR_f_der2=rez['PR_f_der2']
+            Eff_f_der2=rez['Eff_f_der2']
+            if self.type_of_map=="turbine":
+                if 'Gn_f' in rez:
+                    Gn_f=rez['Gn_f']
+                    Gn_f_der2=rez['Gn_f_der2']
+                if 'A_f' in rez:
+                    A_f=rez['A_f']
+                    A_f_der2=rez['A_f_der2']
+                if 'L_f' in rez:
+                    L_f=rez['L_f']
+                    L_f_der2=rez['L_f_der2']
+            rot_v=rez['Rot_v']
+            G_v=rez['G_v']
+            PR_v=rez['PR_v']
+            Eff_v=rez['Eff_v']
+            if self.type_of_map=="turbine":
+                if "Gn_v" in rez:
+                    Gn_v=rez['Gn_v']
+                if "A_v" in rez:
+                    A_v=rez['A_v']
+                if "L_v" in rez:
+                    L_v=rez['L_v']
+            rot_v2=np.linspace(rot_v[0],rot_v[-1],100)
+            G_v2=[]
+            PR_v2=[]
+            Eff_v2=[]
+            G_v2_der2=[]
+            PR_v2_der2=[]
+            Eff_v2_der2=[]
+            if self.type_of_map=="turbine":
+                Gn_v2=[]
+                A_v2=[]
+                L_v2=[]
+                Gn_v2_der2=[]
+                A_v2_der2=[]
+                L_v2_der2=[]
+            for n_i in rot_v2:
+                G_v2.append(G_f(n_i))
+                G_v2_der2.append(G_f_der2(n_i))
+                PR_v2.append(PR_f(n_i))
+                PR_v2_der2.append(PR_f_der2(n_i))
+                Eff_v2.append(Eff_f(n_i))
+                Eff_v2_der2.append(Eff_f_der2(n_i))
+                if self.type_of_map=="turbine":
+                    if "Gn_f" in globals():
+                        Gn_v2.append(Gn_f(n_i))
+                        Gn_v2_der2.append(Gn_f_der2(n_i))
+                    if "A_f" in globals():
+                        A_v2.append(A_f(n_i))
+                        A_v2_der2.append(A_f_der2(n_i))
+                    if 'L_f' in globals():
+                        L_v2.append(L_f(n_i))
+                        L_v2_der2.append(L_f_der2(n_i))
+            if self.type_of_map=="compressor":
+                plot_G.append({'x':rot_v2,'y':G_v2,'label':betta_i,'c':color})
+                scatter_G.append({'x':rot_v,'y':G_v,'c':color})
 
-for ind,betta_i_colors in enumerate(zip(bbb,colors)):
-    betta_i=betta_i_colors[0]
-    color=betta_i_colors[1]
-    rez=Parameters_out(betta_i,1)
-    G_f=rez['G_f']
-    PR_f=rez['PR_f']
-    Eff_f=rez['Eff_f']
-    G_f_der2=rez['G_f_der2']
-    PR_f_der2=rez['PR_f_der2']
-    Eff_f_der2=rez['Eff_f_der2']
-    if type_of_map=="turbine":
-        if 'Gn_f' in rez:
-            Gn_f=rez['Gn_f']
-            Gn_f_der2=rez['Gn_f_der2']
-        if 'A_f' in rez:
-            A_f=rez['A_f']
-            A_f_der2=rez['A_f_der2']
-        if 'L_f' in rez:
-            L_f=rez['L_f']
-            L_f_der2=rez['L_f_der2']
-    rot_v=rez['Rot_v']
-    G_v=rez['G_v']
-    PR_v=rez['PR_v']
-    Eff_v=rez['Eff_v']
-    if type_of_map=="turbine":
-        if "Gn_v" in rez:
-            Gn_v=rez['Gn_v']
-        if "A_v" in rez:
-            A_v=rez['A_v']
-        if "L_v" in rez:
-            L_v=rez['L_v']
-    rot_v2=np.linspace(rot_v[0],rot_v[-1],100)
-    G_v2=[]
-    PR_v2=[]
-    Eff_v2=[]
-    G_v2_der2=[]
-    PR_v2_der2=[]
-    Eff_v2_der2=[]
-    if type_of_map=="turbine":
-        Gn_v2=[]
-        A_v2=[]
-        L_v2=[]  
-        Gn_v2_der2=[]
-        A_v2_der2=[]
-        L_v2_der2=[]
-    for n_i in rot_v2:
-        G_v2.append(G_f(n_i))
-        G_v2_der2.append(G_f_der2(n_i))
-        PR_v2.append(PR_f(n_i))
-        PR_v2_der2.append(PR_f_der2(n_i))
-        Eff_v2.append(Eff_f(n_i))
-        Eff_v2_der2.append(Eff_f_der2(n_i))
-        if type_of_map=="turbine":
-            if "Gn_f" in globals():
-                Gn_v2.append(Gn_f(n_i))
-                Gn_v2_der2.append(Gn_f_der2(n_i))
-            if "A_f" in globals():
-                A_v2.append(A_f(n_i))
-                A_v2_der2.append(A_f_der2(n_i))
-            if 'L_f' in globals():
-                L_v2.append(L_f(n_i))
-                L_v2_der2.append(L_f_der2(n_i))
-    if type_of_map=="compressor":
-        plot_G.append({'x':rot_v2,'y':G_v2,'label':betta_i,'c':color})
-        scatter_G.append({'x':rot_v,'y':G_v,'c':color})
-        
-    if type_of_map=="turbine":
-        plot_Gn.append({'x':rot_v2,'y':Gn_v2,'label':betta_i,'c':color})
-        scatter_Gn.append({'x':rot_v,'y':Gn_v,'c':color})
-        plot_A.append({'x':rot_v2,'y':A_v2,'label':betta_i,'c':color})
-        scatter_A.append({'x':rot_v,'y':A_v,'c':color})
-        plot_L.append({'x':rot_v2,'y':L_v2,'label':betta_i,'c':color})
-        scatter_L.append({'x':rot_v,'y':L_v,'c':color})
-        # points_for_plot=[{'x':rot_v2,'y':G_v2,'label':betta_i,'c':color}]
-        # points_for_scatter=[{'x':rot_v,'y':G_v,'label':betta_i,'c':color}]
-        # _fig3=chart.Chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='{}'.format('G=f(n) при разных betta'),ylabel='G',xlabel='n',dpi=150,figure_size=(14,21))
-    plot_PR.append({'x':rot_v2,'y':PR_v2,'label':betta_i,'c':color})
-    scatter_PR.append({'x':rot_v,'y':PR_v,'c':color})
-    
-    plot_Eff.append({'x':rot_v2,'y':Eff_v2,'label':betta_i,'c':color})
-    scatter_Eff.append({'x':rot_v,'y':Eff_v,'c':color})
-    if type_of_map=="turbine":
-        _fig3=chart.Chart(points_for_scatter=[{'x':rot_v,'y':Gn_v,'c':color}],points_for_plot=[{'x':rot_v2,'y':Gn_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('Gn=f(n).','Ветка betta=',betta_i),ylabel='Gn',xlabel='n',dpi=150,figure_size=(17,15))        
-        _fig3.add_chart(points_for_scatter=[{'x':rot_v,'y':G_v,'c':color}],points_for_plot=[{'x':rot_v2,'y':G_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('G=f(n).','Ветка betta=',betta_i),ylabel='G',xlabel='n')        
-        _fig3.add_chart(points_for_scatter=[{'x':rot_v,'y':PR_v,'c':color}],points_for_plot=[{'x':rot_v2,'y':PR_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('PR=f(n).','Ветка betta=',betta_i),ylabel='RP',xlabel='n')        
-        _fig3.add_chart(points_for_scatter=[{'x':rot_v,'y':Eff_v,'c':color}],points_for_plot=[{'x':rot_v2,'y':Eff_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('Eff=f(n).','Ветка betta=',betta_i),ylabel='Eff',xlabel='n')        
-        _fig3.add_chart(points_for_scatter=[{'x':rot_v,'y':A_v,'c':color}],points_for_plot=[{'x':rot_v2,'y':A_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('A=f(n).','Ветка betta=',betta_i),ylabel='A',xlabel='n')        
-        _fig3.add_chart(points_for_scatter=[{'x':rot_v,'y':L_v,'c':color}],points_for_plot=[{'x':rot_v2,'y':L_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('L=f(n).','Ветка betta=',betta_i),ylabel='L',xlabel='n')        
-    if type_of_map=="compressor":
-        _fig3=chart.Chart(points_for_scatter=[{'x':rot_v,'y':G_v,'c':color}],points_for_plot=[{'x':rot_v2,'y':G_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('G=f(n).','Ветка betta=',betta_i),ylabel='G',xlabel='n',dpi=150,figure_size=(17,15))        
-        _fig3.add_chart(points_for_scatter=[{'x':rot_v,'y':PR_v,'c':color}],points_for_plot=[{'x':rot_v2,'y':PR_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('PR=f(n).','Ветка betta=',betta_i),ylabel='RP',xlabel='n')        
-        _fig3.add_chart(points_for_scatter=[{'x':rot_v,'y':Eff_v,'c':color}],points_for_plot=[{'x':rot_v2,'y':Eff_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('Eff=f(n).','Ветка betta=',betta_i),ylabel='Eff',xlabel='n')        
-    
-    
-    
-    
-if type_of_map=="compressor":
-    _fig4=chart.Chart(points_for_scatter=scatter_G,points_for_plot=plot_G,title='{} {} {}'.format('G=f(n).','Ветка betta=',betta_i),ylabel='G',xlabel='n',dpi=150,figure_size=(17,15))        
-    _fig4=chart.Chart(points_for_scatter=scatter_PR,points_for_plot=plot_PR,title='{} {} {}'.format('PR=f(n).','Ветка betta=',betta_i),ylabel='PR',xlabel='n',dpi=150,figure_size=(17,15))        
-    _fig4=chart.Chart(points_for_scatter=scatter_Eff,points_for_plot=plot_Eff,title='{} {} {}'.format('Eff=f(n).','Ветка betta=',betta_i),ylabel='Eff',xlabel='n',dpi=150,figure_size=(17,15))        
+            if self.type_of_map=="turbine":
+                plot_Gn.append({'x':rot_v2,'y':Gn_v2,'label':betta_i,'c':color})
+                scatter_Gn.append({'x':rot_v,'y':Gn_v,'c':color})
+                plot_A.append({'x':rot_v2,'y':A_v2,'label':betta_i,'c':color})
+                scatter_A.append({'x':rot_v,'y':A_v,'c':color})
+                plot_L.append({'x':rot_v2,'y':L_v2,'label':betta_i,'c':color})
+                scatter_L.append({'x':rot_v,'y':L_v,'c':color})
+                # points_for_plot=[{'x':rot_v2,'y':G_v2,'label':betta_i,'c':color}]
+                # points_for_scatter=[{'x':rot_v,'y':G_v,'label':betta_i,'c':color}]
+                # fig4=chart.Chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title='{}'.format('G=f(n) при разных betta'),ylabel='G',xlabel='n',dpi=150,figure_size=(14,21))
+            plot_PR.append({'x':rot_v2,'y':PR_v2,'label':betta_i,'c':color})
+            scatter_PR.append({'x':rot_v,'y':PR_v,'c':color})
 
-if type_of_map=="turbine":
-    _fig4=chart.Chart(points_for_scatter=scatter_Gn,points_for_plot=plot_Gn,title='{} {} {}'.format('Gn=f(n).','Ветка betta=',betta_i),ylabel='Gn',xlabel='n',dpi=150,figure_size=(17,15))        
-    _fig4=chart.Chart(points_for_scatter=scatter_PR,points_for_plot=plot_PR,title='{} {} {}'.format('PR=f(n).','Ветка betta=',betta_i),ylabel='PR',xlabel='n',dpi=150,figure_size=(17,15))        
-    _fig4=chart.Chart(points_for_scatter=scatter_Eff,points_for_plot=plot_Eff,title='{} {} {}'.format('Eff=f(n).','Ветка betta=',betta_i),ylabel='Eff',xlabel='n',dpi=150,figure_size=(17,15))        
-    _fig4=chart.Chart(points_for_scatter=scatter_A,points_for_plot=plot_A,title='{} {} {}'.format('A=f(n).','Ветка betta=',betta_i),ylabel='A',xlabel='n',dpi=150,figure_size=(17,15))        
-    _fig4=chart.Chart(points_for_scatter=scatter_L,points_for_plot=plot_L,title='{} {} {}'.format('L=f(n).','Ветка betta=',betta_i),ylabel='L',xlabel='n',dpi=150,figure_size=(17,15))        
-            
+            plot_Eff.append({'x':rot_v2,'y':Eff_v2,'label':betta_i,'c':color})
+            scatter_Eff.append({'x':rot_v,'y':Eff_v,'c':color})
+            if print_plot:
+                if self.type_of_map=="turbine":
+                    fig4=chart.Chart(points_for_scatter=[{'x':rot_v,'y':Gn_v,'c':color, 's': 10, 'marker': '+'}],points_for_plot=[{'x':rot_v2,'y':Gn_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('Gn=f(n).','Ветка betta=',betta_i),ylabel='Gn',xlabel='n',dpi=150,figure_size=(17,15))
+                    fig4.add_chart(points_for_scatter=[{'x':rot_v,'y':G_v,'c':color, 's': 10, 'marker': '+'}],points_for_plot=[{'x':rot_v2,'y':G_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('G=f(n).','Ветка betta=',betta_i),ylabel='G',xlabel='n')
+                    fig4.add_chart(points_for_scatter=[{'x':rot_v,'y':PR_v,'c':color, 's': 10, 'marker': '+'}],points_for_plot=[{'x':rot_v2,'y':PR_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('PR=f(n).','Ветка betta=',betta_i),ylabel='RP',xlabel='n')
+                    fig4.add_chart(points_for_scatter=[{'x':rot_v,'y':Eff_v,'c':color, 's': 10, 'marker': '+'}],points_for_plot=[{'x':rot_v2,'y':Eff_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('Eff=f(n).','Ветка betta=',betta_i),ylabel='Eff',xlabel='n')
+                    fig4.add_chart(points_for_scatter=[{'x':rot_v,'y':A_v,'c':color, 's': 10, 'marker': '+'}],points_for_plot=[{'x':rot_v2,'y':A_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('A=f(n).','Ветка betta=',betta_i),ylabel='A',xlabel='n')
+                    fig4.add_chart(points_for_scatter=[{'x':rot_v,'y':L_v,'c':color, 's': 10, 'marker': '+'}],points_for_plot=[{'x':rot_v2,'y':L_v2,'label':betta_i,'c':color}],title='{} {} {}'.format('L=f(n).','Ветка betta=',betta_i),ylabel='L',xlabel='n')
 
-"""
-#6.2) строим для проверки графики распределения параметра k в зависимости от оборотов и бетта
-n_graph=np.linspace(n.iloc[0]*0.9,n.iloc[-1]*1.1, 100)
-betta_graph=np.linspace(-0.2, 1.2, 10)
-if type_of_map=="turbine":
-    fig2, axes2 = plt.subplots(5,1)
-    fig2.set_size_inches(17, 50)
-elif type_of_map=='compressor':
-    fig2, axes2 = plt.subplots(4,1)
-    fig2.set_size_inches(17, 40)
-#axes2[0].set_title('k=f(n) при разных бетта Если на графике что-то криво, то нужно проверить исходные данные')
-#axes2[0].set_xlabel('Обороты')
-#axes2[0].set_ylabel('k=PR/G для компр, k=PR для турбины')
-#        axes2.ylabel('')
-#for betta_i in betta_graph:
-#    k_graph=[]
-#    for_graph=my_interp(rotations,betta_i)
-#    for ni in n_graph:
-#        k_graph.append(for_graph(ni))
-#    axes2[0].scatter(n,k,s=10)
-#    axes2[0].plot(n_graph,k_graph)
-#    axes2[0].legend(betta_graph)
-    
-    #temp_data=reader.loc[reader.n == 0.8] #выделяем из общего массива данных только те, что относятся к определенным оборотам nx
-    #GGG=temp_data.G
-    #Efff=temp_data.Eff
-    #PRRR=temp_data.PR
-    
-#oboroty=[x for x in xrange(1, 25, 2)]  
-#6.3) строим для проверки графики почти такие же, но это графики в классическом виде PR=f(G)   и Eff=(G)
-n_graph2=list(np.arange(n.iloc[0]*0.9,n.iloc[-1]*1.1,0.025))
-betta_graph2=list(np.arange(-0.2,1.2,0.025))
+                if self.type_of_map=="compressor":
+                    fig4=chart.Chart(points_for_scatter=[{'x':rot_v,'y':G_v,'c':color, 's': 10, 'marker': '+'}],points_for_plot=[{'x':rot_v2,'y':G_v2,'label':betta_i,'c':color, 'lw':0.5}],title='{} {} {}'.format('G=f(n).','Ветка betta=',betta_i),ylabel='G',xlabel='n',dpi=150,figure_size=(17,15))
+                    fig4.add_chart(points_for_scatter=[{'x':rot_v,'y':PR_v,'c':color, 's': 10, 'marker': '+'}],points_for_plot=[{'x':rot_v2,'y':PR_v2,'label':betta_i,'c':color, 'lw':0.5}],title='{} {} {}'.format('PR=f(n).','Ветка betta=',betta_i),ylabel='RP',xlabel='n')
+                    fig4.add_chart(points_for_scatter=[{'x':rot_v,'y':Eff_v,'c':color, 's': 10, 'marker': '+'}],points_for_plot=[{'x':rot_v2,'y':Eff_v2,'label':betta_i,'c':color, 'lw':0.5}],title='{} {} {}'.format('Eff=f(n).','Ветка betta=',betta_i),ylabel='Eff',xlabel='n')
 
-#oboroty=list(np.arange(n.iloc[0]*0.9,n.iloc[-1]*1.1,0.01))
-for n_i in n_graph2:
-    G_gr=[]
-    PR_gr=[]    
-    Eff_gr=[]  
-    if type_of_map=="turbine":
-        A_gr=[]
-        L_gr=[]
-    for betta_i in betta_graph2:
-        rez=Parameters_out(betta_i,n_i)
-        G_gr.append(rez['G'])
-        PR_gr.append(rez['PR'])
-        Eff_gr.append(rez['Eff'])
-        if type_of_map=="turbine":
-            if 'A' in rez:
-                A_gr.append(rez['A'])
-            if 'L' in rez:
-                L_gr.append(rez['L'])
-    if type_of_map=="compressor":
-        axes2[1].plot(G_gr,PR_gr)
-        axes2[2].plot(G_gr,Eff_gr)
-        axes2[3].plot(PR_gr,Eff_gr)
-    elif type_of_map=="turbine":
-        axes2[1].plot(PR_gr,list(map(lambda x: x*n_i,G_gr)))
-        axes2[2].plot(PR_gr,Eff_gr)
-        if len(A_gr)>0:
-            axes2[3].plot(PR_gr,A_gr)
-        if len(L_gr)>0:
-            axes2[4].plot(PR_gr,L_gr)
-        
-for betta_i in betta_graph2:
-    G_gr=[]
-    PR_gr=[]    
-    Eff_gr=[]  
-    if type_of_map=="turbine":
-        A_gr=[]
-        L_gr=[]
-    for n_i in n_graph2:
-        rez=Parameters_out(betta_i,n_i)
-        if type_of_map=="turbine":
-            G_gr.append(rez['G']*n_i)    
-        if type_of_map=="compressor":
-            G_gr.append(rez['G'])    
-        PR_gr.append(rez['PR'])
-        Eff_gr.append(rez['Eff'])
-        if type_of_map=="turbine":
-            if 'A' in rez:
-                A_gr.append(rez['A'])
-            if 'L' in rez:
-                L_gr.append(rez['L'])
-    if type_of_map=="compressor":
-        axes2[1].plot(G_gr,PR_gr)
-        axes2[2].plot(G_gr,Eff_gr)
-        axes2[3].plot(PR_gr,Eff_gr)
-    elif type_of_map=="turbine":
-        axes2[1].plot(PR_gr,G_gr)
-        axes2[2].plot(PR_gr,Eff_gr)
-        if len(A_gr)>0:
-            axes2[3].plot(PR_gr,A_gr)
-        if len(L_gr)>0:
-            axes2[4].plot(PR_gr,L_gr)
+        if print_plot:
+            if self.type_of_map == "compressor":
+                chart.Chart(points_for_scatter=scatter_G, points_for_plot=plot_G,
+                                     title='G=f(n) при разных betta', ylabel='G', xlabel='n',
+                                     dpi=150, figure_size=(17, 15))
+                chart.Chart(points_for_scatter=scatter_PR, points_for_plot=plot_PR,
+                                     title='PR=f(n) при разных betta', ylabel='PR', xlabel='n',
+                                     dpi=150, figure_size=(17, 15))
+                chart.Chart(points_for_scatter=scatter_Eff, points_for_plot=plot_Eff,
+                                     title='Eff=f(n) при разных betta', ylabel='Eff',
+                                     xlabel='n', dpi=150, figure_size=(17, 15))
 
+            if self.type_of_map == "turbine":
+                chart.Chart(points_for_scatter=scatter_Gn, points_for_plot=plot_Gn,
+                                     title='Gn=f(n) при разных betta', ylabel='Gn', xlabel='n',
+                                     dpi=150, figure_size=(17, 15))
+                chart.Chart(points_for_scatter=scatter_PR, points_for_plot=plot_PR,
+                                     title='PR=f(n) при разных betta', ylabel='PR', xlabel='n',
+                                     dpi=150, figure_size=(17, 15))
+                chart.Chart(points_for_scatter=scatter_Eff, points_for_plot=plot_Eff,
+                                     title='Eff=f(n) при разных betta', ylabel='Eff',
+                                     xlabel='n', dpi=150, figure_size=(17, 15))
+                chart.Chart(points_for_scatter=scatter_A, points_for_plot=plot_A,
+                                     title='A=f(n) при разных betta', ylabel='A', xlabel='n',
+                                     dpi=150, figure_size=(17, 15))
+                chart.Chart(points_for_scatter=scatter_L, points_for_plot=plot_L,
+                                     title='L=f(n) при разных betta', ylabel='L', xlabel='n',
+                                     dpi=150, figure_size=(17, 15))
 
+    def stage4(self, print_plot=True, quality_n_b=(100,100), dn_min=0.01, dn_max=0.01, betta_min=-0.1, betta_max=1.1):
+    #7) формируем массив обработанных данных для использования в моделях в дальнейшем
 
+        size_n=quality_n_b[0]
+        size_betta=quality_n_b[1]
+        n_min=self.rotations[0]-dn_min
+        n_max=self.rotations[-1]+dn_max
+        betta_min=betta_min
+        betta_max=betta_max
 
-#axes2[1].legend(oboroty)
-#axes2[2].legend(oboroty)
-if type_of_map=="compressor":
-    axes2[1].scatter(G,PR,s=10)
-    axes2[2].scatter(G,Eff,s=10)
-    axes2[3].scatter(PR,Eff,s=10)
-    axes2[1].set_title('PR=f(G) по результатам обработанной функции')
-    axes2[2].set_title('Eff=f(G) по результатам обработанной функции')
-    axes2[3].set_title('Eff=f(PR) по результатам обработанной функции')
-if type_of_map=="turbine":
-    axes2[1].scatter(PR,Gn,s=10)
-    axes2[2].scatter(PR,Eff,s=10)
-    axes2[1].set_title('G=f(PR) по результатам обработанной функции')
-    axes2[2].set_title('Eff=f(PR) по результатам обработанной функции')
-    if 'A' in reader:
-        axes2[3].scatter(PR,A,s=10)
-    if 'L' in reader:
-        axes2[4].scatter(PR,L,s=10)
-#    axes2[3].legend(oboroty)
-#    axes2[4].legend(oboroty)
-    axes2[3].set_title('Alfa=f(PR) по результатам обработанной функции')
-    axes2[4].set_title('Lambda=f(PR) по результатам обработанной функции')
+        n_mainrezult=np.linspace(n_min, n_max, size_n)
+        betta_mainrezult=np.linspace(betta_min,betta_max, size_betta)
 
+        G_mainrezult=np.empty([size_n,size_betta])
+        PR_mainrezult=np.empty([size_n,size_betta])
+        Eff_mainrezult=np.empty([size_n,size_betta])
+        if self.type_of_map=="turbine":
+            A_mainrezult=np.empty([size_n,size_betta])
+            L_mainrezult=np.empty([size_n,size_betta])
+        for ind_n, n_i in enumerate(n_mainrezult):
+            for ind_betta, betta_i in enumerate(betta_mainrezult):
+                rez=self.Parameters_out(betta_i,n_i)
+                G_mainrezult[ind_n, ind_betta]=rez['G']
+                PR_mainrezult[ind_n,ind_betta]=rez['PR']
+                Eff_mainrezult[ind_n,ind_betta]=rez['Eff'] #if (rez['Eff']>0.05) else 0.05
+                if self.type_of_map=="turbine":
+                    if 'A' in rez:
+                        A_mainrezult[ind_n,ind_betta]=rez['A']
+                    if 'L' in rez:
+                        L_mainrezult[ind_n,ind_betta]=rez['L']
+        if self.type_of_map=="turbine":
+            main_rezult=[n_mainrezult,betta_mainrezult,G_mainrezult,PR_mainrezult,Eff_mainrezult]
+            if 'A_mainrezult' in globals():
+                main_rezult.append(A_mainrezult)
+            if 'L_mainrezult' in globals():
+                main_rezult.append(L_mainrezult)
 
-betta_test=0
-n_test=0.8
-rez=Parameters_out(betta_test,n_test)  
-print('Пример выполнения функции:','betta=',betta_test,'n=',n_test,'G=',rez['G'],'PR=',rez['PR'],'Eff=',rez['Eff'])
-betta_test=1
-n_test=0.8
-rez=Parameters_out(betta_test,n_test)  
-print('Пример выполнения функции:','betta=',betta_test,'n=',n_test,'G=',rez['G'],'PR=',rez['PR'],'Eff=',rez['Eff'])
+        elif self.type_of_map=="compressor":
+            main_rezult=[n_mainrezult,betta_mainrezult,G_mainrezult,PR_mainrezult,Eff_mainrezult]
+        #7.1)проверим правильно ли работают функции интерполяции
 
-"""
-#7) формируем массив обработанных данных для использования в моделях в дальнейшем
+        #!!! каждый раз стоит утонять птребный диапазон массива bbox TODO!!! нужно исследовать возможность оптимизации параметра s и k
+        Eff_Func4=RectBivariateSpline(n_mainrezult,betta_mainrezult, Eff_mainrezult, bbox=[n_min, n_max, betta_min, betta_max], kx=3, ky=3, s=0.001)
+        G_Func4=RectBivariateSpline(n_mainrezult,betta_mainrezult, G_mainrezult, bbox=[n_min, n_max, betta_min, betta_max], kx=3, ky=3, s=0.001)
+        PR_Func4=RectBivariateSpline(n_mainrezult,betta_mainrezult, PR_mainrezult,bbox=[n_min, n_max, betta_min, betta_max], kx=3, ky=3, s=0.001)
+        if self.type_of_map=='turbine':
+            A_Func4=RectBivariateSpline(n_mainrezult,betta_mainrezult, A_mainrezult, bbox=[n_min, n_max, betta_min, betta_max], kx=5, ky=5, s=0.0001)
+            L_Func4=RectBivariateSpline(n_mainrezult,betta_mainrezult, L_mainrezult, bbox=[n_min, n_max, betta_min, betta_max], kx=5, ky=5, s=0.0001)
+        # print("проверяем. PR должна монотонно возрастать или уменьшаться вдоль ветки")
+        # print(PR_Func4(1,0.0),PR_Func4(1,0.25),PR_Func4(1,0.5),PR_Func4(1,0.75),PR_Func4(1,1))
+        #8)сохраняем полученный список с данными характеристик в сериализированный файл.
+        # В списке хранятся данные в следующей последовательности:[n(вектор),betta(вектор),G(n*betta),PR(n*betta),Eff(n*betta)]
+        name_of_file=self.name_of_file[:-4]+'_output.dat'
 
+        with open(name_of_file.split('\\')[-1], 'wb') as f:
+            pickle.dump(main_rezult, f)
 
-size_n=100
-size_betta=100
-n_min=rotations[0]-0.01
-n_max=rotations[-1]+0.01
-betta_min=-0.1
-betta_max=1.1
+        #with open(name_of_file, 'rb') as f:
+        #    data_new = pickle.load(f)
 
-n_mainrezult=np.linspace(n_min, n_max, size_n)
-betta_mainrezult=np.linspace(betta_min,betta_max, size_betta)
+        ni = np.linspace(n_min, n_max, size_n*10)
+        ni2 = np.arange(n_min, n_max+0.0001, 0.01)
+        bi = np.linspace(betta_min, betta_max, size_betta*10)
+        bi2 = np.arange(betta_min, betta_max+0.00001, 0.1)
+        nv,bv=np.meshgrid(ni, bi)
+        PRv=PR_Func4(ni,bi)
+        Gv=G_Func4(ni,bi)
+        Effv=Eff_Func4(ni,bi)
+        PRv2=PR_Func4(ni2,bi)
+        Gv2=G_Func4(ni2,bi)
+        PRv3=PR_Func4(ni,bi2)
+        Gv3=G_Func4(ni,bi2)
+        PRv2=np.transpose(PRv2)
+        Gv2=np.transpose(Gv2)
 
-G_mainrezult=np.empty([size_n,size_betta])
-PR_mainrezult=np.empty([size_n,size_betta])
-Eff_mainrezult=np.empty([size_n,size_betta])
-if type_of_map=="turbine":
-    A_mainrezult=np.empty([size_n,size_betta])
-    L_mainrezult=np.empty([size_n,size_betta])
-for ind_n, n_i in enumerate(n_mainrezult):
-    for ind_betta, betta_i in enumerate(betta_mainrezult):
-        rez=Parameters_out(betta_i,n_i)
-        G_mainrezult[ind_n, ind_betta]=rez['G']
-        PR_mainrezult[ind_n,ind_betta]=rez['PR']
-        Eff_mainrezult[ind_n,ind_betta]=rez['Eff'] #if (rez['Eff']>0.05) else 0.05
-        if type_of_map=="turbine":
-            if 'A' in rez:
-                A_mainrezult[ind_n,ind_betta]=rez['A']
-            if 'L' in rez:
-                L_mainrezult[ind_n,ind_betta]=rez['L']
-if type_of_map=="turbine":
-    main_rezult=[n_mainrezult,betta_mainrezult,G_mainrezult,PR_mainrezult,Eff_mainrezult]
-    if 'A_mainrezult' in globals():
-        main_rezult.append(A_mainrezult)
-    if 'L_mainrezult' in globals():
-        main_rezult.append(L_mainrezult)
+        fig3, axes3 = plt.subplots(1,dpi=150)
+        fig3.set_size_inches(30, 20)
+        plt.title('Итоговая аппроксимирующая функция')
 
-elif type_of_map=="compressor":
-    main_rezult=[n_mainrezult,betta_mainrezult,G_mainrezult,PR_mainrezult,Eff_mainrezult]
-#7.1)проверим правильно ли работают функции интерполяции
+        max_eff=self.scales['Eff']
+        lev = [0.7,0.8,0.81,0.82,0.83,0.84,0.85,0.86,0.87,0.88,0.885,0.89,0.895,0.9] #!!!!!!! при необходимости подправить значения изолиний кпд
+        # lev=np.linspace(0.2,max_eff*1.01,num=15)
 
-#!!! каждый раз стоит утонять птребный диапазон массива bbox TODO!!! нужно исследовать возможность оптимизации параметра s и k
-Eff_Func4=RectBivariateSpline(n_mainrezult,betta_mainrezult, Eff_mainrezult, bbox=[n_min, n_max, betta_min, betta_max], kx=3, ky=3, s=0.001)
-G_Func4=RectBivariateSpline(n_mainrezult,betta_mainrezult, G_mainrezult, bbox=[n_min, n_max, betta_min, betta_max], kx=3, ky=3, s=0.001)
-PR_Func4=RectBivariateSpline(n_mainrezult,betta_mainrezult, PR_mainrezult,bbox=[n_min, n_max, betta_min, betta_max], kx=3, ky=3, s=0.001)
-if type_of_map=='turbine':
-    A_Func4=RectBivariateSpline(n_mainrezult,betta_mainrezult, A_mainrezult, bbox=[n_min, n_max, betta_min, betta_max], kx=5, ky=5, s=0.0001)
-    L_Func4=RectBivariateSpline(n_mainrezult,betta_mainrezult, L_mainrezult, bbox=[n_min, n_max, betta_min, betta_max], kx=5, ky=5, s=0.0001)
-print("проверяем. PR должна монотонно возрастать или уменьшаться вдоль ветки")
-print(PR_Func4(1,0.0),PR_Func4(1,0.25),PR_Func4(1,0.5),PR_Func4(1,0.75),PR_Func4(1,1))
-#8)сохраняем полученный список с данными характеристик в сериализированный файл. 
-# В списке хранятся данные в следующей последовательности:[n(вектор),betta(вектор),G(n*betta),PR(n*betta),Eff(n*betta)]
-name_of_file=name_of_file[:-4]+'_output.dat'
+        if self.type_of_map=='compressor':
+            CS=axes3.contourf(Gv,PRv,Effv,levels=lev,cmap='jet')
+            CS2=axes3.contour(Gv,PRv,Effv,levels=lev,colors='black',linewidths=0.5)
+            axes3.clabel(CS2, inline=1, fontsize=10,colors='k')
+            # axes3.scatter(Gv,PRv,color='black',s=0.1)
+            axes3.plot(Gv2,PRv2,color='black',linewidth=1.2,linestyle='dotted')
+            axes3.plot(Gv3,PRv3,color='black',linewidth=1.2,linestyle='dotted')
+            axes3.set_xlabel('G, кг/с',fontsize=20)
+            axes3.set_ylabel('PR',fontsize=20)
+            for i,nx in enumerate(ni2):
+                axes3.text(Gv2[0,i]-0.02,PRv2[0,i]+0.05,np.round(nx,3),fontsize=10)
+            for i,bettax in enumerate(bi2):
+                axes3.text(Gv3[-1,i]+0.0,PRv3[-1,i]+0.05,np.round(bettax,2),fontsize=10)
+            # axes3.set_xlim([0,max(reader.G)*1.2])
+            # axes3.set_ylim([0,max(reader.PR)*1.2])
+        elif self.type_of_map=='turbine':
+            CS=axes3.contourf(PRv,(Gv.transpose()*ni).transpose(),Effv,levels=lev,cmap='jet')
+            CS2=axes3.contour(PRv,(Gv.transpose()*ni).transpose(),Effv,levels=lev,colors='black',linewidths=0.5)
+            axes3.clabel(CS2, inline=1, fontsize=10,colors='k')
+            # axes3.scatter(PR,Gn,color='black',s=5)
+            Gnv2=[]
+            for _betta_const in Gv2:
+                _temp=_betta_const*ni2
+                Gnv2.append(_temp)
+            Gnv2=np.array(Gnv2)
+            Gnv3=(Gv3.transpose()*ni).transpose()
+            # axes3.plot(PRv2,Gnv2,color='black',linewidth=1.2,linestyle='dotted',label=(0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0))
+            axes3.plot(PRv3,Gnv3,color='black',linewidth=1.2,linestyle='dotted',label=(0,0.2,0.4,0.6,0.8,1))
+            axes3.set_ylabel('G*n',fontsize=20)
+            axes3.set_xlabel('PR',fontsize=20)
+            for i,nx in enumerate(ni2):
+                axes3.text(PRv2[0,i]-0.1,Gnv2[0,i]-0.002,np.round(nx,3),fontsize=10)
+            for i,bettax in enumerate(bi2):
+                axes3.text(PRv3[-1,i],Gnv3[-1,i]+0.001,np.round(bettax,2),fontsize=10)
+            # axes3.set_xlim([0,max(reader.PR)*1.2])
+            # axes3.set_ylim([0,max(reader.Gn)*1.2])
 
-with open(name_of_file.split('\\')[1], 'wb') as f:
-    pickle.dump(main_rezult, f)
+        axes3.grid()
+        #axes3.legend()
 
-#with open(name_of_file, 'rb') as f:
-#    data_new = pickle.load(f)
+        quantity_of_rotations=len(self.rotations)#для этого сначала надо знать количество напорных веток
 
-ni = np.linspace(n_min, n_max, size_n*10)
-ni2 = np.arange(n_min, n_max+0.0001, 0.01)
-bi = np.linspace(betta_min, betta_max, size_betta*10)
-bi2 = np.arange(betta_min, betta_max+0.00001, 0.1)
-nv,bv=np.meshgrid(ni, bi)
-PRv=PR_Func4(ni,bi)
-Gv=G_Func4(ni,bi)
-Effv=Eff_Func4(ni,bi)
-PRv2=PR_Func4(ni2,bi)
-Gv2=G_Func4(ni2,bi)
-PRv3=PR_Func4(ni,bi2)
-Gv3=G_Func4(ni,bi2)
-PRv2=np.transpose(PRv2)
-Gv2=np.transpose(Gv2)
+        cmap = plt.get_cmap('jet')
+        colors = [cmap(i) for i in np.linspace(0, 1, quantity_of_rotations)]
 
-fig3, axes3 = plt.subplots(1,dpi=150)
-fig3.set_size_inches(30, 20)
-max_eff=scales['Eff']
-lev = [0.7,0.8,0.81,0.82,0.83,0.84,0.85,0.86,0.87,0.88,0.885,0.89,0.895,0.9] #!!!!!!! при необходимости подправить значения изолиний кпд
-# lev=np.linspace(0.2,max_eff*1.01,num=15)
+        plotPRG=[]
+        scatterPRG=[]
+        plotGEff=[]
+        scatterGEff=[]
+        plotPREff=[]
+        scatterPREff=[]
+        plotPRA=[]
+        scatterPRA=[]
+        plotPRL=[]
+        scatterPRL=[]
+        for ni_color in zip(self.rotations,colors):
+            ni=ni_color[0]
+            color=ni_color[1]
+            Gvect=[]
+            PRvect=[]
+            Effvect=[]
+            Avect=[]
+            Lvect=[]
+            initial_reader=self.DATA['initial_reader']
+            G_points=initial_reader.G[initial_reader.n==ni]
+            if self.type_of_map=='turbine':
+                Gn_points=initial_reader.Gn[initial_reader.n==ni]
+                A_points=initial_reader.A[initial_reader.n==ni]
+                L_points=initial_reader.L[initial_reader.n==ni]
+            PR_points=initial_reader.PR[initial_reader.n==ni]
+            Eff_points=initial_reader.Eff[initial_reader.n==ni]
+            for betta in np.linspace(0.0, 1.0, 50):
+                #сначала строим ветку
+                if self.type_of_map=='compressor':
+                    Gvect.append(float(G_Func4(ni,betta)))
+                if self.type_of_map=='turbine':
+                    Gvect.append(float(G_Func4(ni,betta))*ni)
+                    Avect.append(float(A_Func4(ni,betta)))
+                    Lvect.append(float(L_Func4(ni,betta)))
+                PRvect.append(float(PR_Func4(ni,betta)))
+                Effvect.append(float(Eff_Func4(ni,betta)))
+            if self.type_of_map=='compressor':
+                plotPRG.append({'x':PRvect,'y':Gvect,'c':color},)
+                scatterPRG.append({'x':PR_points,'y':G_points,'c':color},)
+                plotGEff.append({'x':Gvect,'y':Effvect,'c':color},)
+                scatterGEff.append({'x':G_points,'y':Eff_points,'c':color},)
+            if self.type_of_map=='turbine':
+                plotPRG.append({'x':PRvect,'y':Gvect,'c':color},)
+                scatterPRG.append({'x':PR_points,'y':Gn_points,'c':color},)
+                plotGEff.append({'x':Gvect,'y':Effvect,'c':color},)
+                scatterGEff.append({'x':Gn_points,'y':Eff_points,'c':color},)
+                plotPRA.append({'x':PRvect,'y':Avect,'c':color},)
+                scatterPRA.append({'x':PR_points,'y':A_points,'c':color},)
+                plotPRL.append({'x':PRvect,'y':Lvect,'c':color},)
+                scatterPRL.append({'x':PR_points,'y':L_points,'c':color},)
+            plotPREff.append({'x':PRvect,'y':Effvect,'c':color},)
+            scatterPREff.append({'x':PR_points,'y':Eff_points,'c':color},)
+        if self.type_of_map=='turbine':
+            G_title='G*n=f(PR): верификация исходных данных (точек) с итоговой аппроксимирующей функцией'
+            G_ylabel="G*n"
+            Eff_title = 'Eff=f(Gn): верификация исходных данных (точек) с итоговой аппроксимирующей функцией'
+            Eff_xlabel='G*n'
 
-if type_of_map=='compressor':
-    CS=axes3.contourf(Gv,PRv,Effv,levels=lev,cmap='jet')
-    CS2=axes3.contour(Gv,PRv,Effv,levels=lev,colors='black',linewidths=0.5)
-    axes3.clabel(CS2, inline=1, fontsize=10,colors='k')
-    # axes3.scatter(Gv,PRv,color='black',s=0.1)
-    axes3.plot(Gv2,PRv2,color='black',linewidth=1.2,linestyle='dotted')
-    axes3.plot(Gv3,PRv3,color='black',linewidth=1.2,linestyle='dotted')
-    axes3.set_xlabel('G, кг/с',fontsize=20)
-    axes3.set_ylabel('PR',fontsize=20)
-    for i,nx in enumerate(ni2):
-        axes3.text(Gv2[0,i]-0.02,PRv2[0,i]+0.05,np.round(nx,3),fontsize=14)
-    for i,bettax in enumerate(bi2):
-        axes3.text(Gv3[-1,i]+0.0,PRv3[-1,i]+0.05,np.round(bettax,2),fontsize=14)
-    # axes3.set_xlim([0,max(reader.G)*1.2])
-    # axes3.set_ylim([0,max(reader.PR)*1.2])
-elif type_of_map=='turbine':
-    CS=axes3.contourf(PRv,(Gv.transpose()*ni).transpose(),Effv,levels=lev,cmap='jet')
-    CS2=axes3.contour(PRv,(Gv.transpose()*ni).transpose(),Effv,levels=lev,colors='black',linewidths=0.5)
-    axes3.clabel(CS2, inline=1, fontsize=10,colors='k')
-    # axes3.scatter(PR,Gn,color='black',s=5)
-    Gnv2=[]
-    for _betta_const in Gv2:
-        _temp=_betta_const*ni2
-        Gnv2.append(_temp)
-    Gnv2=np.array(Gnv2)
-    Gnv3=(Gv3.transpose()*ni).transpose()
-    # axes3.plot(PRv2,Gnv2,color='black',linewidth=1.2,linestyle='dotted',label=(0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0))
-    axes3.plot(PRv3,Gnv3,color='black',linewidth=1.2,linestyle='dotted',label=(0,0.2,0.4,0.6,0.8,1))
-    axes3.set_ylabel('G*n',fontsize=20)
-    axes3.set_xlabel('PR',fontsize=20)
-    for i,nx in enumerate(ni2):
-        axes3.text(PRv2[0,i]-0.1,Gnv2[0,i]-0.002,np.round(nx,3),fontsize=14)
-    for i,bettax in enumerate(bi2):
-        axes3.text(PRv3[-1,i],Gnv3[-1,i]+0.001,np.round(bettax,2),fontsize=14)
-    # axes3.set_xlim([0,max(reader.PR)*1.2])
-    # axes3.set_ylim([0,max(reader.Gn)*1.2])
+        if self.type_of_map == 'compressor':
+            G_title = 'G=f(PR): верификация исходных данных (точек) с итоговой аппроксимирующей функцией'
+            G_ylabel = "G"
+            Eff_title = 'Eff=f(G): верификация исходных данных (точек) с итоговой аппроксимирующей функцией'
+            Eff_xlabel = 'G'
 
-axes3.grid()
-#axes3.legend()
+        chart.Chart(points_for_scatter=scatterPRG,points_for_plot=plotPRG,title=G_title,ylabel=G_ylabel,xlabel='PR',dpi=150,figure_size=(17,15))
+        chart.Chart(points_for_scatter=scatterGEff,points_for_plot=plotGEff,title=Eff_title,ylabel='Eff',xlabel=Eff_xlabel,dpi=150,figure_size=(17,15))
+        chart.Chart(points_for_scatter=scatterPREff,points_for_plot=plotPREff,title='Eff=f(PR): верификация исходных данных (точек) с итоговой аппроксимирующей функцией',ylabel='Eff',xlabel='PR',dpi=150,figure_size=(17,15))
+        if self.type_of_map=='turbine':
+            chart.Chart(points_for_scatter=scatterPRA,points_for_plot=plotPRA,title='A=f(PR): верификация исходных данных (точек) с итоговой аппроксимирующей функцией',ylabel='A',xlabel='PR',dpi=150,figure_size=(17,15))
+            chart.Chart(points_for_scatter=scatterPRL,points_for_plot=plotPRL,title='L=f(PR): верификация исходных данных (точек) с итоговой аппроксимирующей функцией',ylabel='L',xlabel='PR',dpi=150,figure_size=(17,15))
 
-   
-quantity_of_rotations=len(rotations)#для этого сначала надо знать количество напорных веток    
-colors = [cmap(i) for i in np.linspace(0, 1, quantity_of_rotations)]
-
-plotPRG=[]
-scatterPRG=[]
-plotGEff=[]
-scatterGEff=[]
-plotPREff=[]
-scatterPREff=[]
-plotPRA=[]
-scatterPRA=[]
-plotPRL=[]
-scatterPRL=[]
-for ni_color in zip(rotations,colors):
-    ni=ni_color[0]
-    color=ni_color[1]
-    Gvect=[]
-    PRvect=[]
-    Effvect=[]
-    Avect=[]
-    Lvect=[]
-    G_points=initial_reader.G[initial_reader.n==ni]
-    if type_of_map=='turbine':
-        Gn_points=initial_reader.Gn[initial_reader.n==ni]
-        A_points=initial_reader.A[initial_reader.n==ni]
-        L_points=initial_reader.L[initial_reader.n==ni]
-    PR_points=initial_reader.PR[initial_reader.n==ni]
-    Eff_points=initial_reader.Eff[initial_reader.n==ni]
-    for betta in np.linspace(0.0, 1.0, 50):
-        #сначала строим ветку
-        if type_of_map=='compressor':
-            Gvect.append(float(G_Func4(ni,betta)))    
-        if type_of_map=='turbine':
-            Gvect.append(float(G_Func4(ni,betta))*ni)    
-            Avect.append(float(A_Func4(ni,betta)))    
-            Lvect.append(float(L_Func4(ni,betta)))    
-        PRvect.append(float(PR_Func4(ni,betta)))
-        Effvect.append(float(Eff_Func4(ni,betta)))
-    if type_of_map=='compressor':
-        plotPRG.append({'x':PRvect,'y':Gvect,'c':color},)
-        scatterPRG.append({'x':PR_points,'y':G_points,'c':color},)
-        plotGEff.append({'x':Gvect,'y':Effvect,'c':color},)
-        scatterGEff.append({'x':G_points,'y':Eff_points,'c':color},)
-    if type_of_map=='turbine':
-        plotPRG.append({'x':PRvect,'y':Gvect,'c':color},)
-        scatterPRG.append({'x':PR_points,'y':Gn_points,'c':color},)
-        plotGEff.append({'x':Gvect,'y':Effvect,'c':color},)
-        scatterGEff.append({'x':Gn_points,'y':Eff_points,'c':color},)
-        plotPRA.append({'x':PRvect,'y':Avect,'c':color},)
-        scatterPRA.append({'x':PR_points,'y':A_points,'c':color},)
-        plotPRL.append({'x':PRvect,'y':Lvect,'c':color},)
-        scatterPRL.append({'x':PR_points,'y':L_points,'c':color},)
-    plotPREff.append({'x':PRvect,'y':Effvect,'c':color},)
-    scatterPREff.append({'x':PR_points,'y':Eff_points,'c':color},)
-
-chart.Chart(points_for_scatter=scatterPRG,points_for_plot=plotPRG,title='G*n=f(PR): сверяем исходные данные (точки) с итоговой аппроксимирующей функцией',ylabel='Gn',xlabel='PR',dpi=150,figure_size=(17,15))        
-chart.Chart(points_for_scatter=scatterGEff,points_for_plot=plotGEff,title='Eff=f(Gn): сверяем исходные данные (точки) с итоговой аппроксимирующей функцией',ylabel='Eff',xlabel='Gn',dpi=150,figure_size=(17,15))        
-chart.Chart(points_for_scatter=scatterPREff,points_for_plot=plotPREff,title='Eff=f(PR): сверяем исходные данные (точки) с итоговой аппроксимирующей функцией',ylabel='Eff',xlabel='PR',dpi=150,figure_size=(17,15))        
-if type_of_map=='turbine':
-    chart.Chart(points_for_scatter=scatterPRA,points_for_plot=plotPRA,title='A=f(PR): сверяем исходные данные (точки) с итоговой аппроксимирующей функцией',ylabel='A',xlabel='PR',dpi=150,figure_size=(17,15))        
-    chart.Chart(points_for_scatter=scatterPRL,points_for_plot=plotPRL,title='L=f(PR): сверяем исходные данные (точки) с итоговой аппроксимирующей функцией',ylabel='L',xlabel='PR',dpi=150,figure_size=(17,15))        
-
+'''  
 
 
 #8) создадим функцию, которая будет считать отклонение результирующей функции от исходных точек.

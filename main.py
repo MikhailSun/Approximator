@@ -14,7 +14,9 @@ if __name__ == '__main__':
     name_of_file = "\\2020 11 аэродинамические характеристики компрессора ГТЭ-170 по результатам CFD\\AC CFD 2020 11 A+3.csv"
     from kernel import *
 
-    test=approximator(type=type_of_map, name_of_file=name_of_file)
-    test.stage1_extrapolation()
-    test.stage2_check_every_curve()
+    test=approximator(type=type_of_map, name_of_file=name_of_file, print_plot=False)
+    test.stage1_extrapolation(print_plot=False)
+    test.stage2_check_interpolation_along_n_curve_const(print_plot=False)
+    test.stage3(print_plot=False)
+    test.stage4(print_plot=True)
     plt.show()
